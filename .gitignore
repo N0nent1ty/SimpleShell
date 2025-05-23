@@ -14,9 +14,11 @@ CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
+version.h
 
 # Ignore Visual Studio Code settings
 .vscode/
+
 
 # Ignore asm imediete files
 */*.obj

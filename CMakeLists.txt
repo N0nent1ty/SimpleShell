@@ -5,6 +5,33 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #=========================================================
+# Versioning
+#=========================================================
+set(USER_VERSION_MAJOR "1.0" CACHE STRING "Major version number")
+
+
+# Get version from git tag or commit count
+execute_process(
+  COMMAND git describe --tags --abbrev=0
+  OUTPUT_VARIABLE GIT_TAG
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+execute_process(
+  COMMAND git rev-list --count HEAD
+  OUTPUT_VARIABLE GIT_REV_COUNT
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# 拼接版本號，例如 1.0.42
+string(CONCAT PROJECT_VERSION "${USER_VERSION_MAJOR}." "${GIT_REV_COUNT}")
+message(STATUS "Generated Version: ${PROJECT_VERSION}")
+
+
+file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/version.h"
+"#pragma once\n#define VERSION \"${PROJECT_VERSION}\"\n")
+
+#=========================================================
 # CMake configuration
 #=========================================================
 # Set the path to vcpkg and Visual Studio environment variables
@@ -81,21 +108,6 @@ add_custom_target(build_stub ALL  # 添加 ALL 關鍵字
     COMMENT "Building stub with objcopy extraction"
 )
 
-# 手動構建 target（用於調試）- 修正文件名
-add_custom_target(build_stub_manual
-    COMMAND ${CMAKE_COMMAND} -E echo "=== Manual Stub Build Steps ==="
-    COMMAND ${CMAKE_COMMAND} -E echo "Please run these commands manually:"
-    COMMAND ${CMAKE_COMMAND} -E echo ""
-    COMMAND ${CMAKE_COMMAND} -E echo "cd ${CMAKE_CURRENT_SOURCE_DIR}/stub"
-    COMMAND ${CMAKE_COMMAND} -E echo "call \"${VSVARS_PATH}\""
-    COMMAND ${CMAKE_COMMAND} -E echo "ml64 /c x64Stub.asm /Fo:x64Stub.obj"
-    COMMAND ${CMAKE_COMMAND} -E echo "link x64Stub.obj /entry:_start /subsystem:native /out:x64Stub.exe"
-    COMMAND ${CMAKE_COMMAND} -E echo "objcopy -O binary --only-section=.text x64Stub.exe x64Stub.bin"
-    COMMAND ${CMAKE_COMMAND} -E echo "copy x64Stub.bin ..\\output\\stub.bin"
-    COMMAND ${CMAKE_COMMAND} -E echo ""
-    COMMAND ${CMAKE_COMMAND} -E echo "=== End Manual Steps ==="
-    COMMENT "Display manual build instructions"
-)
 
 # 簡化的手動測試腳本
 add_custom_target(test_build_env
@@ -118,64 +130,6 @@ add_custom_target(copy_stub
     COMMAND ${CMAKE_COMMAND} -E echo "Verifying copied file:"
     COMMAND powershell -Command "& { if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/output/stub.bin') { $size = (Get-Item '${CMAKE_CURRENT_SOURCE_DIR}/output/stub.bin').Length; echo \"✓ stub.bin exists ($size bytes)\" } else { echo '✗ stub.bin not found in output directory' } }"
     COMMENT "Copying stub.bin to output directory"
-)
-add_custom_target(build_stub_python
-    # 步驟1-3: 同樣的編譯和鏈接
-    COMMAND cmd /c "call \"${VSVARS_PATH}\" && ml64 /c x64Stub.asm /Fo:stub_x64.obj"
-    COMMAND cmd /c "call \"${VSVARS_PATH}\" && link stub_x64.obj /entry:_start /subsystem:native /out:stub_x64.exe /filealign:512"
-    # 步驟4: 使用 Python 提取（如果有的話）
-    COMMAND python -c "
-import struct
-try:
-    with open('stub_x64.exe', 'rb') as f:
-        data = f.read()
-    pe_offset = struct.unpack('<I', data[60:64])[0]
-    optional_header_size = struct.unpack('<H', data[pe_offset+20:pe_offset+22])[0]
-    first_section = pe_offset + 24 + optional_header_size
-    raw_offset = struct.unpack('<I', data[first_section+20:first_section+24])[0]
-    raw_size = struct.unpack('<I', data[first_section+16:first_section+20])[0]
-    text_data = data[raw_offset:raw_offset+raw_size]
-    with open('stub_x64.bin', 'wb') as f:
-        f.write(text_data)
-    print(f'Extracted {len(text_data)} bytes')
-except Exception as e:
-    print(f'Python extraction failed: {e}')
-    exit(1)
-"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different stub_x64.bin ${CMAKE_CURRENT_SOURCE_DIR}/output/stub.bin
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/stub
-    DEPENDS create_output_dir
-    COMMENT "Building stub with Python extraction (backup method)"
-)
-add_custom_target(build_stub_simple
-    # 步驟1: 編譯組語，直接生成 .bin 文件
-    COMMAND cmd /c "call \"${VSVARS_PATH}\" && echo Compiling assembly to binary... && ml64 /c x64Stub.asm /Fo:stub_x64.obj"
-    # 步驟2: 創建一個簡單的鏈接腳本來生成純二進制
-    COMMAND cmd /c "call \"${VSVARS_PATH}\" && link stub_x64.obj /entry:_start /subsystem:native /out:stub_x64.exe /filealign:512"
-    # 步驟3: 使用更簡單的方法 - 直接複製機器碼段
-    COMMAND python -c "
-import struct
-with open('stub_x64.exe', 'rb') as f:
-    data = f.read()
-    # 找到 PE 頭
-    pe_offset = struct.unpack('<I', data[60:64])[0]
-    # 找到第一個段 (.text)
-    sections_offset = pe_offset + 248
-    text_rva = struct.unpack('<I', data[sections_offset + 12:sections_offset + 16])[0]
-    text_size = struct.unpack('<I', data[sections_offset + 16:sections_offset + 20])[0]
-    text_file_offset = struct.unpack('<I', data[sections_offset + 20:sections_offset + 24])[0]
-    # 提取 .text 段數據
-    text_data = data[text_file_offset:text_file_offset + text_size]
-    with open('stub_x64.bin', 'wb') as out:
-        out.write(text_data)
-    print(f'Extracted {len(text_data)} bytes to stub_x64.bin')
-"
-    # 步驟4: 複製到 output
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different stub_x64.bin ${CMAKE_CURRENT_SOURCE_DIR}/output/stub.bin
-    COMMAND ${CMAKE_COMMAND} -E echo "Copied stub.bin to output directory"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/stub
-    DEPENDS create_output_dir
-    COMMENT "Building stub with Python extraction"
 )
 
 

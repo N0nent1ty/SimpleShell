@@ -4,6 +4,7 @@
 #include <algorithm>
 #define NOMINMAX
 #include <windows.h>
+#include "../version.h"
 
 const uint8_t XOR_KEY = 0xAA;
 
@@ -47,6 +48,7 @@ bool patch_stub_placeholders(std::vector<uint8_t>& stub, DWORD64 encrypted_va, D
 }
 
 int main(int argc, char* argv[]) {
+    std::cout << "SimpleShell Packer v" << VERSION << std::endl;
     if (argc != 3) {
         std::cerr << "Usage: packer <input.exe> <output.exe>" << std::endl;
         return 1;
