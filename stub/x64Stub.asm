@@ -1,83 +1,50 @@
 .code
 
 _start PROC
-    ; 保存寄存器
-    pushfq
+    ; 最简单的stub - 不解密，只跳转
+    ; 保存必要的寄存器
     push    rax
-    push    rcx
-    push    rdx
-    push    rsi
-    push    rdi
-    push    r8
-    push    r9
+    push    rbx
     
-    ; 動態獲取實際基地址
-    call    get_current_base
-get_current_base:
-    pop     rax                     ; 獲取當前指令地址
-    and     rax, 0FFFFFFFFFFFFF000h ; 對齊到頁邊界
+    ; 获取当前模块基地址
+    call    get_base_addr
     
-    ; 向後搜尋找到 MZ 簽名
-find_pe_header:
+get_base_addr:
+    pop     rax                     ; 获取返回地址
+    and     rax, 0FFFFFFFFFFFFF000h ; 对齐到页边界
+    
+    ; 向后搜索MZ签名
+find_mz_sig:
     cmp     word ptr [rax], 5A4Dh   ; "MZ"
-    je      found_pe_base
-    sub     rax, 1000h              ; 向前一頁
-    jmp     find_pe_header
+    je      found_module_base
+    sub     rax, 1000h              ; 向前一页
+    cmp     rax, 10000h             ; 防止搜索过远
+    jb      error_exit
+    jmp     find_mz_sig
     
-found_pe_base:
-    ; rax = 實際模組基地址
-    ; 計算實際的 .text 段地址
-    lea     rsi, [rax + 1000h]      ; .text 段 RVA = 0x1000
+found_module_base:
+    ; rax = 模块基地址
+    mov     rbx, rax                ; 保存基地址
     
-    ; 這些佔位符會被 packer 替換，但我們用動態計算的值
-    mov     r8, 1111111111111111h   ; 加密段地址佔位符（會被替換）
-    mov     ecx, 22222222h          ; 加密段大小佔位符（會被替換）
+    ; 加载原始OEP RVA（这个占位符会被packer替换）
+    mov     rax, 3333333333333333h  ; 原始OEP RVA占位符
     
-    ; 使用動態計算的地址而不是佔位符
-    ; rsi 已經是正確的動態地址
-    mov     al, 0AAh                ; XOR 密鑰
+    ; 计算原始OEP的绝对地址 = 基地址 + RVA
+    add     rax, rbx
     
-    ; 檢查大小是否有效
-    test    ecx, ecx
-    jz      cleanup
+    ; 恢复寄存器
+    pop     rbx
+    add     rsp, 8                  ; 跳过保存的rax，因为我们要用新的rax跳转
     
-    ; 嘗試解密
-decrypt_loop:
-    xor     byte ptr [rsi], al
-    inc     rsi
-    dec     ecx
-    jnz     decrypt_loop
-    
-cleanup:
-    ; 恢復寄存器
-    pop     r9
-    pop     r8
-    pop     rdi
-    pop     rsi
-    pop     rdx
-    pop     rcx
-    pop     rax
-    popfq
-    
-    ; 動態計算 OEP 並跳轉
-    call    get_oep_base
-get_oep_base:
-    pop     rax
-    and     rax, 0FFFFFFFFFFFFF000h
-find_pe_for_oep:
-    cmp     word ptr [rax], 5A4Dh
-    je      found_oep_base
-    sub     rax, 1000h
-    jmp     find_pe_for_oep
-found_oep_base:
-    ; 計算實際 OEP
-    lea     rax, [rax + 1181h]      ; OEP = 基地址 + 原始 Entry Point RVA
-    
-    ; 這個佔位符也會被 packer 替換，但我們忽略它
-    mov     rdx, 3333333333333333h  ; 原始 OEP 佔位符（會被替換）
-    
-    ; 使用動態計算的地址
+    ; 直接跳转到原始OEP
     jmp     rax
+
+error_exit:
+    ; 如果出错，尝试退出进程
+    pop     rbx
+    pop     rax
+    mov     rcx, 1                  ; 退出码
+    ret
 
 _start ENDP
 

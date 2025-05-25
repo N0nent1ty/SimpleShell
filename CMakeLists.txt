@@ -4,29 +4,45 @@ project(SimpleShell)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# 强制64位架构
+set(CMAKE_GENERATOR_PLATFORM x64)
+set(CMAKE_VS_PLATFORM_NAME x64)
+
+# 确保所有目标都是64位
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(STATUS "Building for 64-bit architecture")
+else()
+    message(FATAL_ERROR "This project requires 64-bit architecture!")
+endif()
+
 #=========================================================
 # Versioning
 #=========================================================
 set(USER_VERSION_MAJOR "1.0" CACHE STRING "Major version number")
-
 
 # Get version from git tag or commit count
 execute_process(
   COMMAND git describe --tags --abbrev=0
   OUTPUT_VARIABLE GIT_TAG
   OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
 )
 
 execute_process(
   COMMAND git rev-list --count HEAD
   OUTPUT_VARIABLE GIT_REV_COUNT
   OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
 )
+
+# 如果git命令失败，使用默认值
+if(NOT GIT_REV_COUNT)
+    set(GIT_REV_COUNT "1")
+endif()
 
 # 拼接版本號，例如 1.0.42
 string(CONCAT PROJECT_VERSION "${USER_VERSION_MAJOR}." "${GIT_REV_COUNT}")
 message(STATUS "Generated Version: ${PROJECT_VERSION}")
-
 
 file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/version.h"
 "#pragma once\n#define VERSION \"${PROJECT_VERSION}\"\n")
@@ -108,7 +124,6 @@ add_custom_target(build_stub ALL  # 添加 ALL 關鍵字
     COMMENT "Building stub with objcopy extraction"
 )
 
-
 # 簡化的手動測試腳本
 add_custom_target(test_build_env
     COMMAND ${CMAKE_COMMAND} -E echo "Testing build environment..."
@@ -120,19 +135,6 @@ add_custom_target(test_build_env
     COMMAND powershell -Command "if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/stub/x64Stub.asm') { echo '✓ x64Stub.asm found' } else { echo '✗ x64Stub.asm not found!' }"
     COMMENT "Testing build environment"
 )
-add_custom_target(copy_stub
-    COMMAND ${CMAKE_COMMAND} -E echo "Copying stub files to output directory..."
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/output
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different 
-        ${CMAKE_CURRENT_SOURCE_DIR}/stub/stub_x64.bin 
-        ${CMAKE_CURRENT_SOURCE_DIR}/output/stub.bin
-    COMMAND ${CMAKE_COMMAND} -E echo "Copy completed!"
-    COMMAND ${CMAKE_COMMAND} -E echo "Verifying copied file:"
-    COMMAND powershell -Command "& { if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/output/stub.bin') { $size = (Get-Item '${CMAKE_CURRENT_SOURCE_DIR}/output/stub.bin').Length; echo \"✓ stub.bin exists ($size bytes)\" } else { echo '✗ stub.bin not found in output directory' } }"
-    COMMENT "Copying stub.bin to output directory"
-)
-
-
 
 # 驗證stub文件的目標
 add_custom_target(verify_stub
@@ -147,16 +149,32 @@ add_custom_target(verify_stub
 )
 
 #=========================================================
-# Compile & link sample code for testing
+# Compile & link sample code for testing - 修复链接问题
 #=========================================================
 
-add_executable(sample_hello
+add_executable(sample_hello WIN32  # 添加WIN32标志
     samples/sample.cpp
 )
 
-# sample_hello 目標為 x64
+# 正确配置Windows GUI程序的链接选项 - 强制64位
 set_target_properties(sample_hello PROPERTIES
-    LINK_FLAGS "/ENTRY:WinMainCRTStartup /MACHINE:X64"
+    WIN32_EXECUTABLE TRUE
+    LINK_FLAGS "/SUBSYSTEM:WINDOWS /MACHINE:X64 /ENTRY:WinMainCRTStartup"
+)
+
+# 链接必要的Windows库 - 确保包含所有必需的运行时库
+target_link_libraries(sample_hello
+    user32.lib
+    gdi32.lib
+    kernel32.lib
+    shell32.lib
+    comctl32.lib
+)
+
+# 添加编译器标志处理UTF-8和字符编码
+target_compile_options(sample_hello PRIVATE
+    /utf-8          # 使用UTF-8编码
+    /wd4819         # 禁用字符编码警告
 )
 
 add_custom_command(TARGET sample_hello POST_BUILD
@@ -173,7 +191,7 @@ add_custom_command(TARGET sample_hello POST_BUILD
 add_custom_target(pack_sample
     COMMAND ${CMAKE_COMMAND} -E echo "Checking if stub.bin exists..."
     COMMAND ${CMAKE_COMMAND} -E echo "Current directory: ${CMAKE_CURRENT_SOURCE_DIR}/output"
-    COMMAND powershell -Command "& { ls *.exe, *.bin | Format-Table Name, Length }"
+    COMMAND powershell -Command "& { if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/output') { ls '${CMAKE_CURRENT_SOURCE_DIR}/output' | Where-Object { $_.Extension -eq '.exe' -or $_.Extension -eq '.bin' } | Format-Table Name, Length } else { echo 'Output directory not found' } }"
     COMMAND ${CMAKE_COMMAND} -E echo "Packing sample_hello.exe..."
     COMMAND $<TARGET_FILE:simpleshell> sample_hello.exe packed_sample.exe
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/output
@@ -185,7 +203,7 @@ add_custom_target(pack_sample
 add_custom_target(check_pe
     COMMAND ${CMAKE_COMMAND} -E echo "Checking PE structure..."
     COMMAND ${CMAKE_COMMAND} -E echo "Files in output directory:"
-    COMMAND powershell -Command "& { ls *.exe | ForEach-Object { echo \"$($_.Name): $($_.Length) bytes\" } }"
+    COMMAND powershell -Command "& { if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/output') { ls '${CMAKE_CURRENT_SOURCE_DIR}/output' | Where-Object { $_.Extension -eq '.exe' } | ForEach-Object { echo \"$($_.Name): $($_.Length) bytes\" } } }"
     # 如果你有dumpbin，可以取消註釋下面這行
     # COMMAND cmd /c "call \"${VSVARS_PATH}\" && dumpbin /headers packed_sample.exe"
     COMMAND ${CMAKE_COMMAND} -E echo "Manual verification required - use PE-bear or similar tool"
@@ -210,6 +228,7 @@ add_custom_target(setup
     COMMAND ${CMAKE_COMMAND} -E echo "  2. cmake --build . --target pack_sample"
     COMMENT "Initial setup - compiles stub"
 )
+
 add_custom_target(debug_info
     COMMAND ${CMAKE_COMMAND} -E echo "=== Debug Information ==="
     COMMAND ${CMAKE_COMMAND} -E echo "Current directory structure:"
@@ -218,4 +237,29 @@ add_custom_target(debug_info
     COMMAND ${CMAKE_COMMAND} -E echo "output/ directory:"
     COMMAND powershell -Command "& { if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/output') { ls '${CMAKE_CURRENT_SOURCE_DIR}/output' } else { echo 'output directory not found' } }"
     COMMENT "Displaying debug information"
+)
+
+# 简单的控制台测试程序 - 避免GUI问题，强制64位
+add_executable(sample_console
+    samples/console_sample.cpp
+)
+
+# 确保控制台程序也是64位
+set_target_properties(sample_console PROPERTIES
+    LINK_FLAGS "/MACHINE:X64"
+)
+
+add_custom_command(TARGET sample_console POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:sample_console>
+        ${CMAKE_CURRENT_SOURCE_DIR}/output/
+)
+
+# 测试控制台版本的打包
+add_custom_target(pack_console
+    COMMAND ${CMAKE_COMMAND} -E echo "Packing console sample..."
+    COMMAND $<TARGET_FILE:simpleshell> sample_console.exe packed_console.exe
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/output
+    DEPENDS simpleshell sample_console build_stub
+    COMMENT "Packing console sample executable"
 )
