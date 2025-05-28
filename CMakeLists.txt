@@ -1,6 +1,25 @@
 cmake_minimum_required(VERSION 3.15)
 project(SimpleShell)
 
+#=========================================================
+# Compiler settings
+#=========================================================
+if(MSVC)
+    # 使用 /utf-8 
+    add_compile_options(/utf-8)
+    
+    
+    # 禁用字碼頁警告
+    add_compile_options(/wd4819)
+    
+    # 設定 Unicode 支援
+    add_compile_definitions(_UNICODE UNICODE)
+    
+    # 設定 Windows 版本
+    add_compile_definitions(WINVER=0x0601 _WIN32_WINNT=0x0601)
+endif()
+
+# 設定 C++ 標準
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -14,6 +33,9 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 else()
     message(FATAL_ERROR "This project requires 64-bit architecture!")
 endif()
+
+
+
 
 #=========================================================
 # Versioning
@@ -61,23 +83,107 @@ if(DEFINED ENV{VCPKG_ROOT})
         CACHE STRING "")
 endif()
 
+
+
+
+
+#=========================================================
+# Setting dependencies
+#=========================================================
+
+# 包含 FetchContent 模組
+include(FetchContent)
+
+# 使用 FetchContent 從 GitHub 自動下載 ImGui（固定版本）
+message(STATUS "正在下載 ImGui...")
+
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.90.4
+)
+
+FetchContent_MakeAvailable(imgui)
+
+# 設定 ImGui 目錄變數
+set(IMGUI_DIR ${imgui_SOURCE_DIR})
+message(STATUS "使用 ImGui 版本來自: ${IMGUI_DIR}")
+
+# ImGui 核心與後端檔案
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+)
+
+set(IMGUI_BACKENDS
+    ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
+)
+
+set(IMGUI_INCLUDE_DIRS
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+)
+
+
 #=========================================================
 # Compile & link the main project
 #=========================================================
-add_executable(simpleshell
+set(PROJECT_SOURCES
     src/packer/pack.cpp
-    #crypto/xor_encrypt.cpp
-    #utils/pe_utils.cpp
+    src/gui/imgui_gui.cpp
+    src/utils/PEChecker.cpp
+    # 可以在此添加其他檔案
+)
+
+
+
+add_executable(${PROJECT_NAME}
+    ${PROJECT_SOURCES}
+    ${IMGUI_SOURCES}
+    ${IMGUI_BACKENDS}
 )
 
 # 讓 simpleshell 依賴於 stub 的生成
-add_dependencies(simpleshell build_stub)
+add_dependencies(${PROJECT_NAME} build_stub)
 
-add_custom_command(TARGET simpleshell POST_BUILD
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:simpleshell>
+        $<TARGET_FILE:${PROJECT_NAME}>
         ${CMAKE_CURRENT_SOURCE_DIR}/output/
 )
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${IMGUI_INCLUDE_DIRS}
+    src/
+)
+
+# Windows 專用設定
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME}
+        d3d11
+        dxgi
+        d3dcompiler
+        winmm
+        imm32
+        ole32
+        oleaut32
+        uuid
+        kernel32
+        user32
+        gdi32
+        winspool
+        shell32
+        comdlg32
+        advapi32
+    )
+        # 如果你想開啟 console 除錯視窗
+     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "/SUBSYSTEM:CONSOLE")
+endif()
+
 
 #=========================================================
 # Compile & link stub code - 使用 objcopy
@@ -193,9 +299,9 @@ add_custom_target(pack_sample
     COMMAND ${CMAKE_COMMAND} -E echo "Current directory: ${CMAKE_CURRENT_SOURCE_DIR}/output"
     COMMAND powershell -Command "& { if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/output') { ls '${CMAKE_CURRENT_SOURCE_DIR}/output' | Where-Object { $_.Extension -eq '.exe' -or $_.Extension -eq '.bin' } | Format-Table Name, Length } else { echo 'Output directory not found' } }"
     COMMAND ${CMAKE_COMMAND} -E echo "Packing sample_hello.exe..."
-    COMMAND $<TARGET_FILE:simpleshell> sample_hello.exe packed_sample.exe
+    COMMAND $<TARGET_FILE:${PROJECT_NAME}> sample_hello.exe packed_sample.exe
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/output
-    DEPENDS simpleshell sample_hello build_stub
+    DEPENDS ${PROJECT_NAME} sample_hello build_stub
     COMMENT "Packing sample executable"
 )
 
@@ -258,8 +364,8 @@ add_custom_command(TARGET sample_console POST_BUILD
 # 测试控制台版本的打包
 add_custom_target(pack_console
     COMMAND ${CMAKE_COMMAND} -E echo "Packing console sample..."
-    COMMAND $<TARGET_FILE:simpleshell> sample_console.exe packed_console.exe
+    COMMAND $<TARGET_FILE:${PROJECT_NAME}> sample_console.exe packed_console.exe
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/output
-    DEPENDS simpleshell sample_console build_stub
+    DEPENDS ${PROJECT_NAME} sample_console build_stub
     COMMENT "Packing console sample executable"
 )

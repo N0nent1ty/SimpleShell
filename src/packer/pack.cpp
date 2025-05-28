@@ -46,25 +46,21 @@ bool patch_oep_only(std::vector<uint8_t>& stub, DWORD original_oep_rva) {
     return false;
 }
 
-int main(int argc, char* argv[]) {
+int pack(const std::string& strInputAbsFile, const std::string& strOutputAbsFile) {
     std::cout << "=== SIMPLE NO ENCRYPTION TEST PACKER ===" << std::endl;
     std::cout << "SimpleShell Simple Test Packer v" << VERSION << std::endl;
     
-    if (argc != 3) {
-        std::cerr << "Usage: simple_pack <input.exe> <output.exe>" << std::endl;
-        return 1;
-    }
 
-    std::string input_path = argv[1];
-    std::string output_path = argv[2];
+
+
     std::vector<uint8_t> binary;
 
-    if (!read_file(input_path, binary)) {
-        std::cerr << "Failed to read input file: " << input_path << std::endl;
+    if (!read_file(strInputAbsFile, binary)) {
+        std::cerr << "Failed to read input file: " << strInputAbsFile << std::endl;
         return 1;
     }
 
-    std::cout << "Original file size: " << binary.size() << " bytes" << std::endl;
+    //std::cout << "Original file size: " << binary.size() << " bytes" << std::endl;
 
     // Basic PE validation
     if (binary.size() < sizeof(IMAGE_DOS_HEADER)) {
@@ -182,8 +178,8 @@ int main(int argc, char* argv[]) {
     std::cout << "  Image Size: 0x" << nt_header->OptionalHeader.SizeOfImage << std::endl;
     std::cout << "  Number of sections: " << std::dec << nt_header->FileHeader.NumberOfSections << std::endl;
 
-    if (!write_file(output_path, binary)) {
-        std::cerr << "Failed to write output file: " << output_path << std::endl;
+    if (!write_file(strOutputAbsFile, binary)) {
+        std::cerr << "Failed to write output file: " << strOutputAbsFile << std::endl;
         return 1;
     }
 
@@ -191,7 +187,7 @@ int main(int argc, char* argv[]) {
     std::cout << "* NO encryption - just testing stub jump logic" << std::endl;
     std::cout << "* Stub should jump from RVA 0x" << std::hex << new_section.VirtualAddress 
               << " to original OEP at RVA 0x" << original_oep_rva << std::endl;
-    std::cout << "Output: " << output_path << " (" << std::dec << binary.size() << " bytes)" << std::endl;
+    std::cout << "Output: " << strOutputAbsFile << " (" << std::dec << binary.size() << " bytes)" << std::endl;
     std::cout << "\nTry running the packed executable now." << std::endl;
     
     return 0;
