@@ -65,7 +65,7 @@ endif()
 # Compile & link the main project
 #=========================================================
 add_executable(simpleshell
-    packer/pack.cpp
+    src/packer/pack.cpp
     #crypto/xor_encrypt.cpp
     #utils/pe_utils.cpp
 )
@@ -97,29 +97,29 @@ add_custom_target(build_stub ALL  # 添加 ALL 關鍵字
     
     # 步驟2: 編譯組語 - 修正文件名
     COMMAND ${CMAKE_COMMAND} -E echo "Compiling x64Stub.asm..."
-    COMMAND cmd /c "call \"${VSVARS_PATH}\" && cd /d \"${CMAKE_CURRENT_SOURCE_DIR}/stub\" && ml64 /c x64Stub.asm /Fo:x64Stub.obj /nologo"
+    COMMAND cmd /c "call \"${VSVARS_PATH}\" && cd /d \"${CMAKE_CURRENT_SOURCE_DIR}/src/stub\" && ml64 /c x64Stub.asm /Fo:x64Stub.obj /nologo"
     
     # 步驟3: 檢查 obj 文件是否生成
     COMMAND ${CMAKE_COMMAND} -E echo "Checking for x64Stub.obj..."
-    COMMAND powershell -Command "if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/stub/x64Stub.obj') { echo '✓ Object file created' } else { echo '✗ Object file missing!'; exit 1 }"
+    COMMAND powershell -Command "if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/src/stub/x64Stub.obj') { echo '✓ Object file created' } else { echo '✗ Object file missing!'; exit 1 }"
     
     # 步驟4: 鏈接 - 使用正確的文件名
     COMMAND ${CMAKE_COMMAND} -E echo "Linking..."
-    COMMAND cmd /c "call \"${VSVARS_PATH}\" && cd /d \"${CMAKE_CURRENT_SOURCE_DIR}/stub\" && link x64Stub.obj /entry:_start /subsystem:native /out:x64Stub.exe /filealign:512 /nologo"
+    COMMAND cmd /c "call \"${VSVARS_PATH}\" && cd /d \"${CMAKE_CURRENT_SOURCE_DIR}/src/stub\" && link x64Stub.obj /entry:_start /subsystem:native /out:x64Stub.exe /filealign:512 /nologo"
     
     # 步驟5: 檢查 exe 文件
-    COMMAND powershell -Command "if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/stub/x64Stub.exe') { echo '✓ Executable created' } else { echo '✗ Executable missing!'; exit 1 }"
+    COMMAND powershell -Command "if (Test-Path '${CMAKE_CURRENT_SOURCE_DIR}/src/stub/x64Stub.exe') { echo '✓ Executable created' } else { echo '✗ Executable missing!'; exit 1 }"
     
     # 步驟6: 使用 objcopy 提取 .text 段
     COMMAND ${CMAKE_COMMAND} -E echo "Extracting .text section with objcopy..."
-    COMMAND objcopy -O binary --only-section=.text ${CMAKE_CURRENT_SOURCE_DIR}/stub/x64Stub.exe ${CMAKE_CURRENT_SOURCE_DIR}/stub/x64Stub.bin
+    COMMAND objcopy -O binary --only-section=.text ${CMAKE_CURRENT_SOURCE_DIR}/src/stub/x64Stub.exe ${CMAKE_CURRENT_SOURCE_DIR}/src/stub/x64Stub.bin
     
     # 步驟7: 確保 output 目錄存在並複製文件
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/output
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/stub/x64Stub.bin ${CMAKE_CURRENT_SOURCE_DIR}/output/stub.bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/src/stub/x64Stub.bin ${CMAKE_CURRENT_SOURCE_DIR}/output/stub.bin
     COMMAND ${CMAKE_COMMAND} -E echo "Copied x64Stub.bin to output/stub.bin"
     
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/stub
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/stub
     DEPENDS create_output_dir
     COMMENT "Building stub with objcopy extraction"
 )
@@ -153,7 +153,7 @@ add_custom_target(verify_stub
 #=========================================================
 
 add_executable(sample_hello WIN32  # 添加WIN32标志
-    samples/sample.cpp
+    src/samples/sample.cpp
 )
 
 # 正确配置Windows GUI程序的链接选项 - 强制64位
@@ -241,7 +241,7 @@ add_custom_target(debug_info
 
 # 简单的控制台测试程序 - 避免GUI问题，强制64位
 add_executable(sample_console
-    samples/console_sample.cpp
+    src/samples/console_sample.cpp
 )
 
 # 确保控制台程序也是64位

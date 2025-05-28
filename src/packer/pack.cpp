@@ -4,7 +4,7 @@
 #include <algorithm>
 #define NOMINMAX
 #include <windows.h>
-#include "../version.h"
+#include "../../version.h"
 
 bool read_file(const std::string& path, std::vector<uint8_t>& buffer) {
     std::ifstream f(path, std::ios::binary);
