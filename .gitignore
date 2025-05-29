@@ -15,6 +15,7 @@ CMakeCache.txt
 cmake_install.cmake
 Makefile
 version.h
+*/imgui.ini
 
 # Ignore Visual Studio Code settings
 .vscode/

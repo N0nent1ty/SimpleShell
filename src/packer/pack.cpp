@@ -23,7 +23,7 @@ bool write_file(const std::string& path, const std::vector<uint8_t>& buffer) {
 bool patch_oep_only(std::vector<uint8_t>& stub, DWORD original_oep_rva) {
     std::cout << "Patching OEP placeholder with RVA: 0x" << std::hex << original_oep_rva << std::endl;
     
-    // 只替换OEP占位符 (3333333333333333h)
+    // Only replace OEP placeholder (3333333333333333h)
     const uint64_t oep_pattern = 0x3333333333333333ULL;
     
     for (size_t i = 0; i <= stub.size() - 8; ++i) {
@@ -32,7 +32,7 @@ bool patch_oep_only(std::vector<uint8_t>& stub, DWORD original_oep_rva) {
             memcpy(stub.data() + i, &oep_rva_64, 8);
             std::cout << "* Updated OEP RVA at offset: 0x" << std::hex << i << std::endl;
             
-            // 显示修改后的8字节
+            // Show the modified 8 bytes
             std::cout << "* New bytes: ";
             for (int j = 0; j < 8; j++) {
                 printf("%02X ", stub[i + j]);
@@ -86,7 +86,7 @@ int pack(const std::string& strInputAbsFile, const std::string& strOutputAbsFile
     std::cout << "Original Entry Point RVA: 0x" << original_oep_rva << std::endl;
     std::cout << "Machine type: 0x" << nt_header->FileHeader.Machine << std::endl;
     
-    // 验证是64位程序
+    // Verify it is a 64-bit executable
     if (nt_header->FileHeader.Machine != IMAGE_FILE_MACHINE_AMD64) {
         std::cerr << "This packer only supports x64 executables!" << std::endl;
         return 1;
@@ -102,34 +102,34 @@ int pack(const std::string& strInputAbsFile, const std::string& strOutputAbsFile
 
     std::cout << "Stub size: " << stub.size() << " bytes" << std::endl;
     
-    // 显示stub的前32字节用于调试
+    // Show the first 32 bytes of the stub for debugging
     std::cout << "Stub first 32 bytes: ";
     for (size_t i = 0; i < std::min((size_t)32, stub.size()); ++i) {
         printf("%02X ", stub[i]);
     }
     std::cout << std::endl;
 
-    // 只修补OEP占位符
+    // Only patch OEP placeholder
     if (!patch_oep_only(stub, original_oep_rva)) {
         std::cerr << "Failed to patch stub!" << std::endl;
         return 1;
     }
 
-    // 显示修补后的stub前32字节
+    // Show the first 32 bytes of the stub after patching
     std::cout << "Stub after patching (first 32 bytes): ";
     for (size_t i = 0; i < std::min((size_t)32, stub.size()); ++i) {
         printf("%02X ", stub[i]);
     }
     std::cout << std::endl;
 
-    // 添加新段
+    // Add new section
     auto section_header = IMAGE_FIRST_SECTION(nt_header);
     DWORD file_align = nt_header->OptionalHeader.FileAlignment;
     DWORD section_align = nt_header->OptionalHeader.SectionAlignment;
     
     DWORD current_sections = nt_header->FileHeader.NumberOfSections;
     
-    // 检查是否有空间添加新的段头
+    // Check if there is space for an additional section header
     DWORD headers_size = dos_header->e_lfanew + sizeof(IMAGE_NT_HEADERS64) + 
                         ((current_sections + 1) * sizeof(IMAGE_SECTION_HEADER));
     DWORD aligned_headers = (headers_size + file_align - 1) & ~(file_align - 1);
@@ -140,7 +140,7 @@ int pack(const std::string& strInputAbsFile, const std::string& strOutputAbsFile
         return 1;
     }
 
-    // 计算新段的位置
+    // Calculate the position of the new section
     DWORD last_idx = current_sections - 1;
     DWORD last_raw_end = section_header[last_idx].PointerToRawData + section_header[last_idx].SizeOfRawData;
     DWORD last_va_end = section_header[last_idx].VirtualAddress + section_header[last_idx].Misc.VirtualSize;
@@ -157,15 +157,15 @@ int pack(const std::string& strInputAbsFile, const std::string& strOutputAbsFile
 
     std::cout << "\nAdding new section: .stub" << std::endl;
     std::cout << "  RVA: 0x" << std::hex << new_section.VirtualAddress << std::endl;
-    std::cout << "  File offset: 0x" << new_section.PointerToRawData << std::endl;
-    std::cout << "  Size: 0x" << new_section.SizeOfRawData << std::endl;
+    std::cout << "  File offset: 0x" << std::hex << new_section.PointerToRawData << std::endl;
+    std::cout << "  Size: 0x" << std::hex << new_section.SizeOfRawData << std::endl;
 
-    // 扩展文件大小并复制stub
+    // Extend file size and copy stub
     size_t new_file_size = new_section.PointerToRawData + new_section.SizeOfRawData;
     binary.resize(new_file_size, 0);
     memcpy(binary.data() + new_section.PointerToRawData, stub.data(), stub.size());
 
-    // 更新PE头
+    // Update PE headers
     nt_header->FileHeader.NumberOfSections++;
     nt_header->OptionalHeader.AddressOfEntryPoint = new_section.VirtualAddress;
     nt_header->OptionalHeader.SizeOfImage = new_section.VirtualAddress + 

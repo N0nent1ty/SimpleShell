@@ -1,49 +1,49 @@
 .code
 
 _start PROC
-    ; 最简单的stub - 不解密，只跳转
-    ; 保存必要的寄存器
+    ; Simplest stub - no decryption, just jump
+    ; Save necessary registers
     push    rax
     push    rbx
     
-    ; 获取当前模块基地址
+    ; Get current module base address
     call    get_base_addr
     
 get_base_addr:
-    pop     rax                     ; 获取返回地址
-    and     rax, 0FFFFFFFFFFFFF000h ; 对齐到页边界
+    pop     rax                     ; Get return address
+    and     rax, 0FFFFFFFFFFFFF000h ; Align to page boundary
     
-    ; 向后搜索MZ签名
+    ; Search backward for MZ signature
 find_mz_sig:
     cmp     word ptr [rax], 5A4Dh   ; "MZ"
     je      found_module_base
-    sub     rax, 1000h              ; 向前一页
-    cmp     rax, 10000h             ; 防止搜索过远
+    sub     rax, 1000h              ; Go back one page
+    cmp     rax, 10000h             ; Prevent searching too far
     jb      error_exit
     jmp     find_mz_sig
     
 found_module_base:
-    ; rax = 模块基地址
-    mov     rbx, rax                ; 保存基地址
+    ; rax = module base address
+    mov     rbx, rax                ; Save base address
     
-    ; 加载原始OEP RVA（这个占位符会被packer替换）
-    mov     rax, 3333333333333333h  ; 原始OEP RVA占位符
+    ; Load original OEP RVA (this placeholder will be replaced by packer)
+    mov     rax, 3333333333333333h  ; Original OEP RVA placeholder
     
-    ; 计算原始OEP的绝对地址 = 基地址 + RVA
+    ; Calculate absolute address of original OEP = base address + RVA
     add     rax, rbx
     
-    ; 恢复寄存器
+    ; Restore registers
     pop     rbx
-    add     rsp, 8                  ; 跳过保存的rax，因为我们要用新的rax跳转
+    add     rsp, 8                  ; Skip saved rax, since we want to use new rax for jump
     
-    ; 直接跳转到原始OEP
+    ; Directly jump to original OEP
     jmp     rax
 
 error_exit:
-    ; 如果出错，尝试退出进程
+    ; If error, try to exit process
     pop     rbx
     pop     rax
-    mov     rcx, 1                  ; 退出码
+    mov     rcx, 1                  ; Exit code
     ret
 
 _start ENDP
