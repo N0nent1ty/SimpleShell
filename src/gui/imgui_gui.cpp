@@ -42,7 +42,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void ShowPEFilePickerUI();
 std::string WideToUtf8(const std::wstring &wstr);
 std::string AddPackedToFilename(const std::string &path);
-
+constexpr float convertToDXRGBA(float fNumber){return static_cast<float>(fNumber / 255.0f);}
 // Main code
 int main(int, char **)
 {
@@ -79,7 +79,7 @@ int main(int, char **)
 
     // 設定視窗透明度
     SetLayeredWindowAttributes(g_hWnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
-
+    //SetLayeredWindowAttributes(g_hWnd, 0, 200, LWA_ALPHA); 
     // Initialize Direct3D
     if (!CreateDeviceD3D(g_hWnd))
     {
@@ -104,7 +104,7 @@ int main(int, char **)
     // Setup Dear ImGui style for transparency
     ImGui::StyleColorsDark();
     ImGuiStyle &style = ImGui::GetStyle();
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.1f, 0.1f, 0.1f, 0.7f); // 深灰 + 半透明背景
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(convertToDXRGBA(30), convertToDXRGBA(30), convertToDXRGBA(125), 0.2f); // 深灰 + 半透明背景
     style.WindowRounding = 8.0f;                                      // 圓角
     style.FrameRounding = 4.0f;
     style.Colors[ImGuiCol_ChildBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f); // Child 視窗透明
@@ -187,7 +187,28 @@ int main(int, char **)
             ImGui::Separator();
             ShowPEFilePickerUI();
             ImGui::Separator();
-            std::string packed_filename = AddPackedToFilename(selected_path_utf8);
+
+            // Get current executable directory
+            char exePath[MAX_PATH] = {0};
+            GetModuleFileNameA(NULL, exePath, MAX_PATH);
+            std::string exeDir = exePath;
+            size_t lastSlash = exeDir.find_last_of("\\/");
+            if (lastSlash != std::string::npos) {
+                exeDir = exeDir.substr(0, lastSlash + 1);
+            } else {
+                exeDir = "";
+            }
+            // Get filename from selected_path_utf8 and append _packed before extension
+            std::filesystem::path sel_path(selected_path_utf8);
+            std::string packed_filename;
+            if (!selected_path_utf8.empty()) {
+                std::string stem = sel_path.stem().string() + "_packed";
+                std::string ext = sel_path.extension().string();
+                packed_filename = exeDir + stem + ext;
+            } else {
+                packed_filename = "";
+            }
+
             ImGui::Text("Packed file will be saved as: %s", packed_filename.empty() ? "No file selected" : packed_filename.c_str());
 
             if (ImGui::Button("Pack File"))
