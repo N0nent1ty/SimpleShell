@@ -1,4 +1,3 @@
-// === SimpleShell Encrypted Packer (XOR) ===
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -62,6 +61,7 @@ int pack(const std::string& input_path, const std::string& output_path) {
     for (int i = 0; i < nt_header->FileHeader.NumberOfSections; ++i) {
         if (strcmp((char*)section_header[i].Name, ".text") == 0) {
             text_section = &section_header[i];
+            section_header[i].Characteristics |= IMAGE_SCN_MEM_WRITE;
             break;
         }
     }
@@ -70,6 +70,7 @@ int pack(const std::string& input_path, const std::string& output_path) {
     DWORD text_rva  = text_section->VirtualAddress;
     DWORD text_size = text_section->SizeOfRawData;
     DWORD text_raw  = text_section->PointerToRawData;
+    //text_section->Characteristics |= IMAGE_SCN_MEM_WRITE;
     uint8_t xor_key = 0xAA;
 
     for (DWORD i = 0; i < text_size; ++i)

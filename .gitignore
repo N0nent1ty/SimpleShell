@@ -28,3 +28,8 @@ version.h
 */*.o
 */*.d
 */*.s
+*/*.obj
+*/*.elf
+*/*.map
+*/*.dmp
+*/*.pdb

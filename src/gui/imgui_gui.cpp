@@ -211,9 +211,19 @@ int main(int, char **)
 
             ImGui::Text("Packed file will be saved as: %s", packed_filename.empty() ? "No file selected" : packed_filename.c_str());
 
+
+            int nPackedResult = 0;
             if (ImGui::Button("Pack File"))
             {
-                pack(selected_path_utf8, packed_filename);
+                nPackedResult= pack(selected_path_utf8, packed_filename);
+                if(nPackedResult == 0)
+                {
+                    ::MessageBoxExW(g_hWnd, L"Packing completed successfully!", L"Success", MB_OK | MB_ICONINFORMATION, 0);
+                }
+                else
+                {
+                    ::MessageBoxExW(g_hWnd, L"Packing failed! Please check the console for details.", L"Error", MB_OK | MB_ICONERROR, 0);
+                }
             }
 
             if (ImGui::Button("Bring to Front"))
