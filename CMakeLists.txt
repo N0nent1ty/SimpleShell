@@ -133,9 +133,7 @@ set(IMGUI_INCLUDE_DIRS
 # Compile & link the main project
 #=========================================================
 set(PROJECT_SOURCES
-    src/packer/pack.cpp
-    src/gui/imgui_gui.cpp
-    src/utils/PEChecker.cpp
+    src/packer/main.cpp
     # 可以在此添加其他檔案
 )
 

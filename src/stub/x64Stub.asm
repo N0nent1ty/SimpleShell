@@ -1,51 +1,43 @@
 .code
+PUBLIC _start
 
 _start PROC
-    ; Simplest stub - no decryption, just jump
-    ; Save necessary registers
-    push    rax
-    push    rbx
-    
-    ; Get current module base address
-    call    get_base_addr
-    
-get_base_addr:
-    pop     rax                     ; Get return address
-    and     rax, 0FFFFFFFFFFFFF000h ; Align to page boundary
-    
-    ; Search backward for MZ signature
-find_mz_sig:
-    cmp     word ptr [rax], 5A4Dh   ; "MZ"
-    je      found_module_base
-    sub     rax, 1000h              ; Go back one page
-    cmp     rax, 10000h             ; Prevent searching too far
-    jb      error_exit
-    jmp     find_mz_sig
-    
-found_module_base:
-    ; rax = module base address
-    mov     rbx, rax                ; Save base address
-    
-    ; Load original OEP RVA (this placeholder will be replaced by packer)
-    mov     rax, 3333333333333333h  ; Original OEP RVA placeholder
-    
-    ; Calculate absolute address of original OEP = base address + RVA
+    ; reserver registers for use
+    ; rbx: PEB base
+    push rbx
+    push rcx
+    push rdx
+
+    ; === Step 1: Get ImageBase from PEB ===
+    mov     rbx, gs:[60h]        ; PEB base
+    mov     rbx, [rbx + 10h]     ; PEB->ImageBaseAddress
+
+    ; === Step 2: Load encrypted text section info ===
+    mov     ecx, 0AAAAAAAAh      ; placeholder -> text RVA
+    mov     edx, 0BBBBBBBBh      ; placeholder -> text size
+    mov     al,  0CCh            ; placeholder -> XOR key
+
+    ; === Step 3: Decrypt .text section ===
+    add     rcx, rbx             ; rcx = VA of .text
+    xor     r8d, r8d             ; counter = 0
+
+decrypt_loop:
+    cmp     r8d, edx
+    jge     decrypt_done
+    xor     byte ptr [rcx + r8], al
+    inc     r8d
+    jmp     decrypt_loop
+
+decrypt_done:
+    ; === Step 4: Jump to OEP ===
+    mov     rax, 3333333333333333h  ; placeholder -> original OEP
     add     rax, rbx
-    
-    ; Restore registers
+
+    ; === Step 5: Restore registers and jump to OEP ===
+    pop     rdx
+    pop     rcx
     pop     rbx
-    add     rsp, 8                  ; Skip saved rax, since we want to use new rax for jump
-    
-    ; Directly jump to original OEP
     jmp     rax
 
-error_exit:
-    ; If error, try to exit process
-    pop     rbx
-    pop     rax
-    mov     rcx, 1                  ; Exit code
-    ret
-
 _start ENDP
-
 END
